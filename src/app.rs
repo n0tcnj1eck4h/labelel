@@ -1,12 +1,15 @@
 use super::project::Project;
+use crate::colors::COLORS;
+use crate::project::Label;
 use crate::project::Segment;
 use crate::project::Tool;
 use egui::Color32;
 use egui::FontId;
 use egui::Rangef;
 use egui::Sense;
+use egui::TextBuffer;
 use egui_extras::Column;
-use std::path::Path;
+use std::path::PathBuf;
 
 pub struct SegmentDrag {
     segment_index: usize,
@@ -24,7 +27,6 @@ pub struct Input {
     tool: Option<Tool>,
     hover_pos: Option<egui::Pos2>,
     scroll_delta: egui::Vec2,
-    click: bool,
 }
 
 pub struct App {
@@ -66,12 +68,53 @@ impl eframe::App for App {
         self.sidebar(ctx);
         self.central_panel(ctx, input);
         self.timeline(ctx);
+        if let Some(project) = &mut self.project
+            && let Some((id, name)) = &mut project.add_label_modal
+        {
+            let mut modal = egui::Modal::new("addlabelbox".into());
+            modal.area = modal.area.default_size((128.0, 100.0));
+            let clicked = modal
+                .show(ctx, |ui| {
+                    ui.vertical_centered_justified(|ui| {
+                        ui.add(egui::TextEdit::singleline(name));
+                        ui.columns(2, |uis| {
+                            if uis[0].button("").clicked() {
+                                Some(true)
+                            } else if uis[1].button("").clicked() {
+                                Some(false)
+                            } else {
+                                None
+                            }
+                        })
+                    })
+                    .inner
+                })
+                .inner;
+            match clicked {
+                Some(true) => {
+                    let name = name.take();
+                    let id = *id;
+                    project.add_label_modal = None;
+                    if let std::collections::hash_map::Entry::Vacant(e) = project.labels.entry(id) {
+                        e.insert(Label {
+                                name,
+                                color: COLORS[id as usize % COLORS.len()],
+                            });
+                    } else {
+                        self.message_box = Some("This ID is taken already".to_string());
+                        return;
+                    }
+                }
+                Some(false) => project.add_label_modal = None,
+                None => {}
+            }
+        }
         self.msg_box(ctx);
     }
 }
 
 impl App {
-    pub fn open_project(&mut self, yaml_file_path: &Path) {
+    pub fn open_project(&mut self, yaml_file_path: PathBuf) {
         let loaded_project = Project::load(yaml_file_path);
         match loaded_project {
             Ok(project) => {
@@ -108,7 +151,6 @@ impl App {
     }
 
     pub fn read_inputs(&mut self, ctx: &egui::Context) -> Input {
-        
         ctx.input(|r| {
             let key = |k| r.key_pressed(k);
 
@@ -134,7 +176,7 @@ impl App {
                 } else {
                     r.raw_scroll_delta
                 },
-                click: r.pointer.primary_clicked(),
+                // click: r.pointer.primary_clicked(),
             }
         })
     }
@@ -142,126 +184,138 @@ impl App {
     pub fn sidebar(&mut self, ctx: &egui::Context) {
         egui::SidePanel::right("sidepanel")
             .resizable(false)
+            .exact_width(256.0)
             .show(ctx, |ui| {
-                if let Some(project) = &mut self.project {
-                    ui.vertical_centered_justified(|ui| {
-                        ui.heading("Labels");
-                        egui_extras::TableBuilder::new(ui)
-                            // .column(Column::auto())
-                            .column(Column::remainder())
-                            // .column(Column::auto())
-                            // .column(Column::auto())
-                            .body(|mut b| {
-                                for (&i, label) in project.labels.iter() {
-                                    b.row(16.0, |mut row| {
-                                        // row.col(|ui| {
-                                        //     ui.checkbox(&mut false, ());
-                                        // });
-                                        row.col(|ui| {
-                                            ui.style_mut().visuals.override_text_color =
-                                                Some(label.color);
-                                            if ui
-                                                .add(
-                                                    egui::Button::new(&label.name)
-                                                        .selected(project.label_id == Some(i)),
-                                                )
-                                                .clicked()
-                                            {
-                                                project.label_id = Some(i);
-                                            };
-                                        });
-                                        // row.col(|ui| {
-                                        //     ui.label("0");
-                                        // });
-                                        // row.col(|ui| {
-                                        //     ui.label("0");
-                                        // });
-                                    });
-                                }
-                            });
-                        ui.style_mut().visuals.override_text_color = None;
-                        ui.separator();
-                        ui.heading("Tools");
-                        ui.columns(3, |ui| {
-                            let mut tool = |i: usize, t, icon, hover| {
-                                ui[i].vertical_centered_justified(|ui| {
-                                    if ui
-                                        .add(egui::Button::new(icon).selected(project.tool == t))
-                                        .on_hover_text(hover)
-                                        .clicked()
-                                    {
-                                        project.tool = t;
-                                    };
-                                });
-                            };
-                            tool(0, Tool::Stamp, "", "Stamp tool");
-                            tool(1, Tool::Drag, "", "Drag tool");
-                            tool(2, Tool::Edit, "", "Edit tool");
-                        });
-                        ui.separator();
-                        ui.heading("Options");
-                        ui.horizontal(|ui| ui.checkbox(&mut self.smooth_scroll, "Smooth scroll"));
-                        ui.horizontal(|ui| {
-                            ui.checkbox(&mut self.advance_on_accept, "Quick advance")
-                        });
-                        ui.separator();
-                        ui.horizontal(|ui| {
-                            ui.label("Image index");
-                            ui.add(
-                                egui::DragValue::new(&mut project.image_index)
-                                    .range(0..=(project.images.len() - 1)),
-                            );
-                        });
-                    });
-                }
+                self.label_buttons(ui);
 
                 egui::TopBottomPanel::new(egui::panel::TopBottomSide::Bottom, "saveload")
                     .show_separator_line(false)
                     .show_inside(ui, |ui| {
                         ui.vertical(|ui| {
-                            ui.label("Q - Stamp tool");
-                            ui.label("W - Drag tool");
-                            ui.label("E - Edit tool");
-                            ui.label("A - Previous image");
-                            ui.label("D - Next image");
-                            ui.label("X - Delete segment");
-                            ui.label("C - Clone segment");
-                            ui.label("Click space to stamp");
-                            ui.label("[Shift] Scroll to resize stamp");
-                            ui.columns(2, |ui| {
-                                ui[0].vertical_centered_justified(|ui| {
-                                    if ui
-                                        .add(egui::Button::new(""))
-                                        .on_hover_text("Load")
-                                        .clicked()
-                                    {
-                                        let path = rfd::FileDialog::new()
-                                            .add_filter("yaml", &["yaml"])
-                                            .pick_file();
-
-                                        if let Some(path) = path {
-                                            self.open_project(&path);
-                                        }
-                                    }
-                                });
-                                ui[1].vertical_centered_justified(|ui| {
-                                    let button = egui::Button::new("");
-                                    if let Some(p) = &mut self.project {
-                                        if ui.add(button).on_hover_text("Save").clicked()
-                                            && let Err(err) = p.save() {
-                                                self.message_box = Some(format!("{}", err));
-                                            }
-                                    } else {
-                                        ui.scope(|ui| {
-                                            ui.disable();
-                                            ui.add(button);
-                                        });
-                                    }
-                                });
-                            });
+                            help(ui);
+                            self.save_load_buttons(ui);
                         });
                     });
             });
+    }
+
+    fn save_load_buttons(&mut self, ui: &mut egui::Ui) {
+        ui.columns(2, |ui| {
+            ui[0].vertical_centered_justified(|ui| {
+                if ui
+                    .add(egui::Button::new(""))
+                    .on_hover_text("Load")
+                    .clicked()
+                {
+                    let path = rfd::FileDialog::new()
+                        .add_filter("yaml", &["yaml"])
+                        .pick_file();
+
+                    if let Some(path) = path {
+                        self.open_project(path);
+                    }
+                }
+            });
+            ui[1].vertical_centered_justified(|ui| {
+                let button = egui::Button::new("");
+                if let Some(p) = &mut self.project {
+                    if ui.add(button).on_hover_text("Save").clicked()
+                        && let Err(err) = p.save()
+                    {
+                        self.message_box = Some(format!("{}", err));
+                    }
+                } else {
+                    ui.scope(|ui| {
+                        ui.disable();
+                        ui.add(button);
+                    });
+                }
+            });
+        });
+    }
+
+    fn label_buttons(&mut self, ui: &mut egui::Ui) {
+        if let Some(project) = &mut self.project {
+            ui.vertical_centered_justified(|ui| {
+                ui.heading("Labels");
+                egui_extras::TableBuilder::new(ui)
+                    // .column(Column::auto())
+                    .column(Column::remainder())
+                    // .column(Column::auto())
+                    // .column(Column::auto())
+                    .body(|mut b| {
+                        for (&i, label) in project.labels.iter() {
+                            b.row(16.0, |mut row| {
+                                // row.col(|ui| {
+                                //     ui.checkbox(&mut false, ());
+                                // });
+                                row.col(|ui| {
+                                    ui.style_mut().visuals.override_text_color = Some(label.color);
+                                    if ui
+                                        .add(
+                                            egui::Button::new(&label.name)
+                                                .selected(project.label_id == Some(i)),
+                                        )
+                                        .clicked()
+                                    {
+                                        project.label_id = Some(i);
+                                    };
+                                });
+                                // row.col(|ui| {
+                                //     ui.label("0");
+                                // });
+                                // row.col(|ui| {
+                                //     ui.label("0");
+                                // });
+                            });
+                        }
+                        b.row(16.0, |mut row| {
+                            row.col(|ui| {
+                                if ui.add(egui::Button::new("+")).clicked() {
+                                    project.add_label_modal =
+                                        Some((1 + project.labels.len() as u32, String::new()));
+                                };
+                            });
+                        });
+                    });
+                ui.style_mut().visuals.override_text_color = None;
+                ui.separator();
+                ui.heading("Tools");
+                ui.columns(3, |ui| {
+                    let mut tool = |i: usize, t, icon, hover| {
+                        ui[i].vertical_centered_justified(|ui| {
+                            if ui
+                                .add(egui::Button::new(icon).selected(project.tool == t))
+                                .on_hover_text(hover)
+                                .clicked()
+                            {
+                                project.tool = t;
+                            };
+                        });
+                    };
+                    tool(0, Tool::Stamp, "", "Stamp tool");
+                    tool(1, Tool::Drag, "", "Drag tool");
+                    tool(2, Tool::Edit, "", "Edit tool");
+                });
+                ui.separator();
+                ui.heading("Options");
+                ui.horizontal(|ui| ui.checkbox(&mut self.smooth_scroll, "Smooth scroll"));
+                ui.horizontal(|ui| ui.checkbox(&mut self.advance_on_accept, "Quick advance"));
+                ui.separator();
+                // ui.columns(3, |ui| {
+                //     ui[0].vertical_centered_justified(|ui| {
+                //         ui.add(egui::Button::new("Train").selected(false))
+                //     });
+                //     ui[1].vertical_centered_justified(|ui| {
+                //         ui.add(egui::Button::new("Val").selected(false))
+                //     });
+                //     ui[2].vertical_centered_justified(|ui| {
+                //         ui.add(egui::Button::new("Test").selected(false))
+                //     });
+                // });
+                nav_buttons(ui, project);
+            });
+        }
     }
 
     pub fn central_panel(&mut self, ctx: &egui::Context, input: Input) {
@@ -312,11 +366,11 @@ impl App {
                             segment.size += resize;
                             segment.center += shift;
                         }
+
+                        ui.ctx().set_cursor_icon(drag.icon);
                     } else if res.drag_stopped() {
                         project.edit_drag = None;
-                    }
-
-                    if let Some(hover_pos) = input.hover_pos
+                    } else if let Some(hover_pos) = input.hover_pos
                         && let Some(segment) = highlighted_segment
                     {
                         let (i, rect, _, _) = segment;
@@ -335,8 +389,7 @@ impl App {
                             _ => egui::CursorIcon::Default,
                         };
                         ui.ctx().set_cursor_icon(icon);
-
-                        if res.drag_started() {
+                        if res.drag_started() || res.is_pointer_button_down_on() {
                             project.edit_drag = Some(SegmentDrag {
                                 segment_index: i,
                                 awesome: egui::Vec2::new((x - 1) as f32, (y - 1) as f32)
@@ -459,6 +512,46 @@ impl App {
             }
         };
     }
+}
+
+fn help(ui: &mut egui::Ui) {
+    ui.label("Q - Stamp tool");
+    ui.label("W - Drag tool");
+    ui.label("E - Edit tool");
+    ui.label("A - Previous image");
+    ui.label("D - Next image");
+    ui.label("X - Delete segment");
+    ui.label("C - Clone segment");
+    ui.label("Click space to stamp");
+    ui.label("[Shift] Scroll to resize stamp");
+}
+
+fn nav_buttons(ui: &mut egui::Ui, project: &mut Project) {
+    ui.columns(5, |ui| {
+        ui[0].vertical_centered_justified(|ui| {
+            if ui.add(egui::Button::new("")).clicked() {
+                project.image_index = 0;
+            }
+        });
+        ui[1].vertical_centered_justified(|ui| {
+            if ui.add(egui::Button::new("")).clicked() {
+                project.back();
+            }
+        });
+        ui[2].add(
+            egui::DragValue::new(&mut project.image_index).range(0..=(project.images.len() - 1)),
+        );
+        ui[3].vertical_centered_justified(|ui| {
+            if ui.add(egui::Button::new("")).clicked() {
+                project.advance();
+            }
+        });
+        ui[4].vertical_centered_justified(|ui| {
+            if ui.add(egui::Button::new("")).clicked() {
+                project.image_index = project.images.len() - 1;
+            }
+        });
+    });
 }
 
 pub fn fun_name(image_rect: egui::Rect, segment: &Segment) -> egui::Rect {

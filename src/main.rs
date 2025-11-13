@@ -3,7 +3,7 @@ mod colors;
 mod project;
 mod yolo;
 
-use std::path::Path;
+use std::path::PathBuf;
 
 use egui::{FontData, FontDefinitions, FontFamily};
 
@@ -22,7 +22,7 @@ fn main() {
             egui_extras::install_image_loaders(&cc.egui_ctx);
             let mut app = Box::<app::App>::default();
             if let Some(file) = file {
-                app.open_project(Path::new(&file));
+                app.open_project(PathBuf::from(&file));
             }
             let mut fonts = FontDefinitions::default();
 

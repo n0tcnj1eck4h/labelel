@@ -3,12 +3,13 @@ use crate::colors::COLORS;
 use crate::yolo::YoloDataConfig;
 
 use egui::ahash::HashMap;
+use serde_yaml::Number;
+use serde_yaml::Value;
 use std::fs;
 use std::fs::File;
 use std::io::BufRead;
 use std::io::BufReader;
 use std::io::Write;
-use std::path::Path;
 use std::path::PathBuf;
 
 #[derive(Default)]
@@ -38,6 +39,7 @@ pub enum Tool {
 }
 
 pub struct Project {
+    pub original_yaml: Value,
     pub labels: HashMap<u32, Label>,
     pub images: Vec<Image>,
     pub image_index: usize,
@@ -46,14 +48,20 @@ pub struct Project {
     pub tool: Tool,
     pub drag_start_pos: Option<egui::Pos2>,
     pub edit_drag: Option<SegmentDrag>,
+    pub add_label_modal: Option<(u32, String)>,
+    yaml_file_path: PathBuf,
 }
 
 impl Project {
-    pub fn load(yaml_file_path: &Path) -> anyhow::Result<Project> {
-        let contents = fs::read_to_string(yaml_file_path)?;
-        let yaml: YoloDataConfig = serde_yaml::from_str(&contents)?;
+    pub fn load(yaml_file_path: PathBuf) -> anyhow::Result<Project> {
+        let contents = fs::read_to_string(&yaml_file_path)?;
+        // let yaml: YoloDataConfig = serde_yaml::from_str(&contents)?;
+        let yaml: Value = serde_yaml::from_str(&contents)?;
+        dbg!(&yaml);
+        let yolo: YoloDataConfig = serde_yaml::from_value(yaml.clone())?;
+
         let base = yaml_file_path.parent().unwrap();
-        let train_dir_path = base.join(&yaml.train);
+        let train_dir_path = base.join(&yolo.train);
         let mut images = vec![];
         for file in fs::read_dir(train_dir_path)? {
             let file = file?;
@@ -97,7 +105,7 @@ impl Project {
         }
 
         let mut labels = HashMap::default();
-        for (&index, name) in &yaml.names {
+        for (&index, name) in &yolo.names {
             labels.insert(
                 index,
                 Label {
@@ -110,6 +118,8 @@ impl Project {
         images.sort_by(|a, b| a.file_path.file_name().cmp(&b.file_path.file_name()));
 
         Ok(Project {
+            yaml_file_path,
+            original_yaml: yaml,
             images,
             labels,
             image_index: 0,
@@ -118,10 +128,27 @@ impl Project {
             tool: Tool::Stamp,
             drag_start_pos: None,
             edit_drag: None,
+            add_label_modal: None,
         })
     }
 
-    pub fn save(&self) -> anyhow::Result<()> {
+    pub fn save(&mut self) -> anyhow::Result<()> {
+        let nc = self.labels.len();
+        let v = Value::Mapping(
+            self.labels
+                .iter()
+                .map(|(id, label)| (Value::Number(Number::from(*id)), label.name.clone().into()))
+                .collect(),
+        );
+        self.original_yaml["names"] = v;
+        self.original_yaml["nc"] = nc.into();
+        let mut file = File::create(&self.yaml_file_path)?;
+        write!(
+            &mut file,
+            "{}",
+            &serde_yaml::to_string(&self.original_yaml)?
+        )?;
+
         for image in &self.images {
             if image.segments.is_empty() {
                 continue;

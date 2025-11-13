@@ -11,3 +11,7 @@ egui_extras = { version = "0.33.0", features = ["all_loaders", "image"] }
 rfd = "0.15.4"
 serde = { version = "1.0.228", features = ["alloc", "derive"] }
 serde_yaml = "0.9.34"
+
+[profile.release]
+strip = true 
+lto = true
