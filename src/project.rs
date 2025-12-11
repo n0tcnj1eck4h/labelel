@@ -26,6 +26,7 @@ pub struct Segment {
 
 pub struct Image {
     pub file_path: PathBuf,
+    pub file_name: String,
     pub labels_file_path: PathBuf,
     pub segments: Vec<Segment>,
     pub uri: String,
@@ -49,7 +50,7 @@ pub struct Project {
     pub drag_start_pos: Option<egui::Pos2>,
     pub edit_drag: Option<SegmentDrag>,
     pub add_label_modal: Option<(u32, String)>,
-    yaml_file_path: PathBuf,
+    pub yaml_file_path: PathBuf,
 }
 
 impl Project {
@@ -61,17 +62,20 @@ impl Project {
         let yolo: YoloDataConfig = serde_yaml::from_value(yaml.clone())?;
 
         let base = yaml_file_path.parent().unwrap();
+        dbg!(&base);
         let train_dir_path = base.join(&yolo.train);
+        dbg!(&train_dir_path);
         let mut images = vec![];
         for file in fs::read_dir(train_dir_path)? {
             let file = file?;
-            if file.file_type()?.is_file() && file.path().to_string_lossy().ends_with(".png") {
-                let labels_file_path = PathBuf::from(
-                    file.path()
-                        .to_string_lossy()
-                        .replace("images", "labels")
-                        .replace(".png", ".txt"),
-                );
+            if file.file_type()?.is_file()
+                && (file.path().to_string_lossy().ends_with(".png")
+                    || file.path().to_string_lossy().ends_with(".jpg"))
+            {
+                let mut labels_file_path =
+                    PathBuf::from(file.path().to_string_lossy().replace("images", "labels"));
+
+                labels_file_path.set_extension("txt");
 
                 let mut segments = vec![];
                 if let Ok(file) = File::open(&labels_file_path) {
@@ -93,10 +97,18 @@ impl Project {
                     }
                 };
 
+                let file_name = file
+                    .path()
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .to_string();
                 let mut uri = "file://".to_string();
                 uri.push_str(&file.path().to_string_lossy());
+
                 images.push(Image {
                     uri,
+                    file_name,
                     labels_file_path,
                     file_path: file.path(),
                     segments,

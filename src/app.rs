@@ -97,9 +97,9 @@ impl eframe::App for App {
                     project.add_label_modal = None;
                     if let std::collections::hash_map::Entry::Vacant(e) = project.labels.entry(id) {
                         e.insert(Label {
-                                name,
-                                color: COLORS[id as usize % COLORS.len()],
-                            });
+                            name,
+                            color: COLORS[id as usize % COLORS.len()],
+                        });
                     } else {
                         self.message_box = Some("This ID is taken already".to_string());
                         return;
@@ -314,6 +314,15 @@ impl App {
                 //     });
                 // });
                 nav_buttons(ui, project);
+                ui.vertical(|ui| {
+                    if let Some(image) = project.images.get(project.image_index) {
+                        if ui.link(image.file_name.clone()).clicked() {
+                            if let Err(err) = open::that(&image.file_path) {
+                                println!("{}", err);
+                            }
+                        }
+                    }
+                });
             });
         }
     }
@@ -330,7 +339,10 @@ impl App {
 
                 project.rect_size = project.rect_size.max(egui::Vec2 { x: 2.0, y: 2.0 });
 
-                let image = &mut project.images[project.image_index];
+                let Some(image) = &mut project.images.get_mut(project.image_index) else {
+                    return;
+                };
+
                 let res =
                     // ui .centered_and_justified(|ui| {
                         ui.add(egui::Image::new(&image.uri).sense(Sense::click_and_drag()));
@@ -539,7 +551,8 @@ fn nav_buttons(ui: &mut egui::Ui, project: &mut Project) {
             }
         });
         ui[2].add(
-            egui::DragValue::new(&mut project.image_index).range(0..=(project.images.len() - 1)),
+            egui::DragValue::new(&mut project.image_index)
+                .range(0..=(project.images.len().saturating_sub(1))),
         );
         ui[3].vertical_centered_justified(|ui| {
             if ui.add(egui::Button::new("")).clicked() {
@@ -548,7 +561,7 @@ fn nav_buttons(ui: &mut egui::Ui, project: &mut Project) {
         });
         ui[4].vertical_centered_justified(|ui| {
             if ui.add(egui::Button::new("")).clicked() {
-                project.image_index = project.images.len() - 1;
+                project.image_index = project.images.len().saturating_sub(1);
             }
         });
     });
