@@ -1,3 +1,5 @@
+// LTeX: language=pl-PL
+
 #set page(margin: 1in)
 #set par(justify: true)
 #set text(lang: "pl")
@@ -13,6 +15,7 @@
   bottom + left,
   text(size: 10pt)[2025/2026r.]
 )
+
 
 #pagebreak()
 #outline()
@@ -42,8 +45,8 @@ Za kopiowanie i usuwanie istniejących etykiet odpowiadają skróty klawiszowe o
 
 #pagebreak()
 = Instrukcja obsługi
-Aby uruchomić program wystarczy dwukrotnie wcisnąć plik wykonywalny.
-Alternatywnie jeżeli chcemy od razu otworzyć wybrany zestaw danych możemy podać do niego ścieżkę: `labelel.exe ./zestaw/data.yaml`.
+Aby uruchomić program, wystarczy dwukrotnie wcisnąć plik wykonywalny.
+Alternatywnie, jeżeli chcemy od razu otworzyć wybrany zestaw danych, możemy podać do niego ścieżkę: `labelel.exe ./zestaw/data.yaml`.
 
 == Tworzenie projektu
 Ze względu na relatywnie sztywną strukturę katalogów formatu YOLOv11 program może otwierać tylko istniejące projektu.
@@ -61,7 +64,7 @@ names:
 ```
 
 == Otwieranie i zapisywanie projektu
-Projekt można otworzyć wciskając przycisk z ikonką folderu w prawym dolnym rogu ekranu i wybierająć plik `data.yaml` naszego zestawu.
+Projekt można otworzyć wciskając przycisk z ikonką folderu w prawym dolnym rogu ekranu i następnie wybierając plik `data.yaml` naszego zestawu.
 #figure(
   image("load.png", width: 50%),
   caption: [Przycisk otwierania projektu],
@@ -105,9 +108,75 @@ Można też użyć przycisków nawigacyjnych na prawym panelu:
 )
 
 == Etykietowanie
-Do pracy z etykietami są dostępne trzy narzędzia: Stamp, drag i edit tool.
+Do pracy z etykietami są dostępne trzy narzędzia: stamp, drag i edit tool.
 Aktywne narzędzie można wybrać z prawego panelu albo skrótami klawiszowymi `Q`, `W` i `E`.
 #figure(
   image("tools.png", width: 70%),
   caption: [Narzędzia],
 )
+
+#pagebreak()
+
+=== Narzędzie Stępel
+Pierwsze i główne narzędzie w programie (stępel) pozwala
+na etykietowanie poprzez nakierowanie bounding box'a na obiekt zainteresowania
+i zatwierdzeniu klawiszem myszy lub spacją. Obszar jest wycentrowany na kursorze myszy,
+a jego rozmiary można zmieniać kółkiem myszy (proporcje można zmienić, trzymając klawisz shift).
+
+Narzędzie idealnie się nadaje do etykietowania sekwencji obrazów pochodzących z nagrania --
+Z połączeniem z opcją *Quick advance* ilość wykonanych czynności na jedną etykietę sprowadza się
+do:
+- nakierowania kursora na obiekt,
+- ewentualna zmiana rozmiarów obszaru (np. w przypadku gdy obiekt oddalił się od obiektywu),
+- zatwierdzenie spację (lub klawiszem myszy)
+
+Zatwierdzanie spacją jest preferowane, ponieważ pozwala na uniknięcie przypadkowego
+przesunięciu kursora przy wciskaniu klawisza myszy.
+
+#figure(
+  image("./stapinmysht.png", width: 50%),
+  caption: [Stępel w akcji],
+)
+
+=== Narzędzie Przeciągania
+Narzędzie przeciągania pozwala na bardziej tradycyjne zaznaczanie obszarów.
+#grid(columns: 2,
+  figure(
+    image("./wb1.png", width: 80%),
+    caption: [Pozycjonowanie pierwszego rogu obszaru],
+  ),
+  figure(
+    image("./wb2.png", width: 80%),
+    caption: [Zaznaczanie obszaru],
+  )
+)
+
+#pagebreak()
+=== Narzędzie edytowania
+Narzędzie edytowania pozwala na przeciąganie i zmienianie rozmiaru
+istniejących etykiet. Usuwanie i kopiowanie etykiet odbywa się za
+pomocą klawiszy X i C niezależnie od aktywnego narzędzia.
+#grid(columns: 2,
+  figure(
+    image("./dragging.png", width: 80%),
+    caption: [Przeciąganie obszaru],
+  ),
+  figure(
+    image("./resizing.png", width: 80%),
+    caption: [Modyfikacja obszaru],
+  )
+)
+
+= Wykorzystane technologie
+Do utworzenia programu został użyty język Rust.
+Jest to natywny język ogólnego zastosowania z bogatym
+ekosystemem.
+
+Wykorzystane biblioteki:
+- egui -- niezależne od platformy natywne interfejsy graficzne.
+- serde -- serializacja i deserializacja formatów takich jak yaml, czy json.
+- rfd -- wieloplatformowe dialogi wyboru pliku.
+- image -- wczytywanie zdjęć.
+
+
+
